@@ -16,13 +16,16 @@ rules; Part B holds the phase prompts. Section numbers in code and docs refer to
 
 ## Current state
 
-- Phase 0 is delivered (see `Docs/Phase0_PreProduction.md`) and waiting for the user's go-ahead and real PC specs. Section 0 of the prompt was blank, so the Baseline tier and a beginner skill level are assumed.
-- The engine is UE 5.8, module `WebOfTheCity`. The only C++ so far is `Perf/PerfRouteRunner`.
-- None of the C++ or editor steps have been compiled or run yet; the user's first Windows build is the first real test.
+- Phases 0 and 1 are delivered (`Docs/Phase0_PreProduction.md`, `Docs/Phase1_Traversal.md`). Both checklists still need confirming on the user's PC. The user said "do all as you wish", so the proposed keyboard + mouse layout counts as approved. Section 0 of the prompt was blank, so the Baseline tier and a beginner skill level are assumed.
+- The engine is UE 5.8, module `WebOfTheCity`.
+- Traversal is split in two:
+  - `Traversal/TraversalSim` is the engine-independent state machine and physics. It is compiled and tested outside Unreal by `Tools/TraversalSim/run_tests.sh` (21 tests, including route bots and a dead-end scan). Keep it free of engine types beyond FVector/FMath, and add a test for every behaviour change.
+  - `HeroMovementComponent`, `HeroCharacter`, `HeroDebugHUD` and `WebOfTheCityGameMode` are the Unreal glue. None of the Unreal-side C++ has been compiled yet; the user's first Windows build is the first real test.
+- Every traversal number lives in `FTraversalTuning` (`TraversalTypes.h`). After changing it, regenerate `Docs/TraversalTuning.md` with `Tools/TraversalSim/tuning_table.py`.
 
 ## Conventions
 
 - Naming and layout: `Docs/Standards.md`. Keep IP names out of code and asset names (`Hero`, not `SpiderMan`).
 - Perf harness: `Tools/Perf/analyze_perf.py`, with budgets in `Tools/Perf/budgets.json`. The CSV column order is a contract with `PerfRouteRunner.cpp`.
-- Tests: `python -m unittest discover -s Tools/Perf/tests`.
+- Tests: `python -m unittest discover -s Tools/Perf/tests` and `Tools/TraversalSim/run_tests.sh` (also with `CXX=clang++`).
 - Greybox city and perf route: `Tools/Editor/make_greybox_city.py`. Running it with plain `python` does a dry run that checks the route doesn't pass through buildings.

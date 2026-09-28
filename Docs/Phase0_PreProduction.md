@@ -146,7 +146,8 @@ git lfs install
 
 1. *File → New Level → **Empty Open World** → Create.* Then *File → Save Current Level As…*, create the folders `WebOfTheCity/Maps/Test` under *Content*, and save as **`L_PerfRoute_Swing`**.
 2. *Tools → Execute Python Script…* and pick `Tools/Editor/make_greybox_city.py`. It takes about a minute. The Output Log should end with:
-   `Greybox: 480 buildings, … 1.8 x 1.8 km, route 'Swing' 2486 m. Now use File > Save All.`
+   `Greybox: 456 buildings, 136 water tanks, 24 park trees, 4 stations, 1.8 x 1.8 km, route 'Swing' 2486 m. Now use File > Save All.`
+   (Phase 1 added the park, anchor tags and fast-travel stations; re-run the script on an older map to get them.)
 3. *File → Save All*.
 4. Test the route in the editor: press **Play**, press the backtick key (`` ` ``) to open the console, type `PerfRoute.Start Swing`, and press Enter. The camera flies through the street canyons for about 45 s (including the 5 s warm-up). The Output Log then prints `Route 'Swing' finished: … Wrote …\Saved\Perf\PerfRoute_Swing_<time>.csv`.
 5. *Project Settings → Maps & Modes*: set **Editor Startup Map** and **Game Default Map** to `L_PerfRoute_Swing` for now. *Project Settings → Packaging → List of maps to include in a packaged build*: add `L_PerfRoute_Swing`.
@@ -224,7 +225,7 @@ python Tools\Perf\analyze_perf.py Saved\Perf
 |---|---|---|
 | 1 | Build *Development Editor / Win64* in Visual Studio | `Build succeeded`, 0 errors |
 | 2 | Open the `.uproject` | Editor opens with no "missing modules" prompt |
-| 3 | Run `make_greybox_city.py` in the empty open-world map | Log shows 480 buildings and route `Swing` 2486 m; the city is visible; `PerfRoute_Swing` is in the Outliner |
+| 3 | Run `make_greybox_city.py` in the empty open-world map | Log shows 456 buildings and route `Swing` 2486 m; the city is visible; `PerfRoute_Swing` is in the Outliner |
 | 4 | Play → `PerfRoute.Start Swing` | Camera flies the whole route without hitting buildings; log prints `Wrote …csv` |
 | 5 | `python Tools\Perf\analyze_perf.py Saved\Perf` | A report with a gates table appears (the verdict can be FAIL in the editor; that's fine) |
 | 6 | `git lfs ls-files` after committing the map | Lists `.umap` / `.uasset` files |

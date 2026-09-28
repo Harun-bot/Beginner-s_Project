@@ -28,6 +28,9 @@ ArchivedBuilds/
 *.code-workspace
 .vscode/
 
+# ---- Traversal core test build (Tools/TraversalSim/run_tests.sh) ----
+Tools/TraversalSim/build/
+
 # ---- Python tools ----
 __pycache__/
 *.pyc

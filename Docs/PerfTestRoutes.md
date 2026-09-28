@@ -28,6 +28,14 @@ harness is `APerfRouteRunner` (camera on a spline, one CSV row per frame) + `Too
 Each route is just another `PerfRouteRunner` actor with its own `RouteName`, run with
 `-PerfRoute=<RouteName>`. Add one to `Nightly.ps1` by calling it again with `-Route <Name> -Map <Map> -SkipBuild`.
 
+## Traversal bots (Phase 1)
+
+`Tools/TraversalSim/run_tests.sh` runs the traversal core against the same greybox city (exported by
+`make_greybox_city.py --export`). A novice bot (only holds swing) and a skilled bot (times its releases) each fly
+the Swing route, and a dead-end scan tries 40 random street starts. Section 21's "traversal bots that swing test
+routes" start here. They catch feel regressions (touchdowns, stalls, dead ends) and report traces per frame, the
+main CPU cost of traversal.
+
 ## How a measurement is taken
 
 1. Packaged **Development** build (never Debug, never the editor for gate numbers).
