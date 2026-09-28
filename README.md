@@ -21,6 +21,15 @@ Offline-first; optional co-op later.
 | 6 | Polish and hardening | |
 | 7 | Release and live-ops | |
 
+## Play it in the browser
+
+`Web/Preview/` is a browser version of the Phase 1 swinging prototype. Its movement code is a line-by-line port of
+the tested C++ traversal core, and it uses the same greybox city.
+- **Live link:** https://claude.ai/artifact/Xe9SzSPSziz21NnHzdnC7r (private to the owner until shared).
+- **Run it locally:** `cd Web/Preview && python -m http.server 8000`, then open http://localhost:8000.
+
+It is a preview for trying the feel, not the game: placeholder art, no combat or story.
+
 ## Start here
 
 1. **[Docs/Phase0_PreProduction.md](Docs/Phase0_PreProduction.md)**: hardware tier, engine choice, install
@@ -48,4 +57,8 @@ python -m unittest discover -s Tools/Perf/tests
 
 :: traversal core tests + swing bots (Git Bash / WSL / Linux / macOS with g++ or clang++)
 Tools/TraversalSim/run_tests.sh
+
+:: browser preview: regenerate data from the C++ tuning and the city script, then test the JS port
+python Web/Preview/gen_data.py
+node Web/Preview/sim.test.mjs
 ```

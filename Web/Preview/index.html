@@ -1,0 +1,909 @@
+<title>Web of the City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --night: #0e1220;
+    --dusk: #1a2140;
+    --slate: #3b465e;
+    --pearl: #eef1f6;
+    --mist: #a9b3c7;
+    --sodium: #ffb547;
+    --signal: #6ee7c8;
+    --warn: #ff8a5c;
+    --panel: rgba(14, 18, 32, 0.78);
+    --line: rgba(238, 241, 246, 0.14);
+    --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; overflow: hidden; background: var(--night); color: var(--pearl);
+    font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #streaks { position: fixed; inset: 0; pointer-events: none; }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; pointer-events: none; font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; }
+  .hud .label { color: var(--mist); text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px; }
+  #hud-state { top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 3px;
+    background: var(--panel); border: 1px solid var(--line); width: max-content; }
+  .pill b { font-weight: 600; color: var(--sodium); letter-spacing: 0.14em; }
+  .tiers { display: flex; gap: 4px; }
+  .tiers i { width: 18px; height: 5px; background: rgba(238,241,246,0.18); display: block; }
+  .tiers i.on { background: var(--sodium); }
+  #hud-detail { color: var(--mist); line-height: 1.6; background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 10px; border-radius: 3px; min-width: 230px; font-variant-numeric: tabular-nums; }
+  #hud-detail em { color: var(--pearl); font-style: normal; }
+
+  #hud-speed { left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: 10px; }
+  #speed-num { font-family: var(--display); font-weight: 800; font-size: 88px; line-height: 0.8; color: var(--pearl);
+    font-variant-numeric: tabular-nums; min-width: 1.6ch; text-align: right; text-shadow: 0 2px 18px rgba(0,0,0,0.45); }
+  .speed-units { display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
+  .speed-units span:first-child { font-family: var(--display); font-weight: 700; font-size: 22px; color: var(--sodium); letter-spacing: 0.04em; }
+
+  #hud-air { top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; width: min(320px, calc(100vw - 32px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px 12px; }
+  .air-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-variant-numeric: tabular-nums; }
+  #air-num { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; }
+  #air-num.goal { color: var(--signal); }
+  .track { position: relative; height: 8px; margin: 10px 0 6px; background: rgba(238,241,246,0.12); }
+  #air-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--sodium); }
+  #air-fill.goal { background: var(--signal); }
+  #air-best { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--pearl); left: 0; opacity: 0.8; }
+  .track-scale { display: flex; justify-content: space-between; color: var(--mist); font-size: 10.5px; }
+
+  #hud-gauge { left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); }
+  #hud-gauge .track { height: 10px; margin: 6px 0 4px; }
+  #gauge-window { position: absolute; top: 0; bottom: 0; background: rgba(110, 231, 200, 0.35); border-left: 1px solid var(--signal); border-right: 1px solid var(--signal); }
+  #gauge-needle { position: absolute; top: -4px; width: 3px; height: 18px; background: var(--pearl); transform: translateX(-1px); }
+  #gauge-needle.hot { background: var(--signal); box-shadow: 0 0 10px var(--signal); }
+  .gauge-caption { display: flex; justify-content: space-between; color: var(--mist); font-size: 10.5px; }
+
+  #toasts { top: 22%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .toast { font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--pearl); text-shadow: 0 2px 16px rgba(0,0,0,0.6); animation: toast 1.6s ease forwards; white-space: nowrap; }
+  .toast.good { color: var(--signal); }
+  .toast.warm { color: var(--sodium); }
+  .toast.small { font-size: 20px; }
+  @keyframes toast { 0% { opacity: 0; transform: translateY(8px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+
+  #hud-keys { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); color: var(--mist); text-align: right; line-height: 1.7; }
+  kbd { font-family: var(--mono); font-size: 11px; color: var(--pearl); border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 3px; padding: 0 5px; background: rgba(14,18,32,0.6); }
+
+  #reticle { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+    background: rgba(238,241,246,0.55); pointer-events: none; }
+
+  /* ---------- start / pause card ---------- */
+  #menu { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(120% 90% at 20% 100%, rgba(255,181,71,0.18), transparent 60%), rgba(8, 10, 20, 0.62);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); overflow-y: auto; }
+  .card { width: min(560px, 100%); display: grid; gap: 18px; }
+  .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sodium); }
+  h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(56px, 13vw, 104px); line-height: 0.86;
+    letter-spacing: 0.01em; text-transform: uppercase; text-wrap: balance; }
+  h1 span { color: var(--sodium); }
+  .lede { margin: 0; color: var(--mist); max-width: 52ch; }
+  .controls { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; align-items: baseline; }
+  .controls dt { text-align: right; white-space: nowrap; }
+  .controls dd { margin: 0; color: var(--mist); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { font: inherit; cursor: pointer; }
+  .btn { font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--night); background: var(--sodium); border: 0; border-radius: 3px; padding: 10px 22px; }
+  .btn:hover { background: #ffc46b; }
+  .btn:focus-visible, .ghost:focus-visible, .tbtn:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+  .ghost { background: transparent; color: var(--pearl); border: 1px solid var(--line); border-radius: 3px; padding: 9px 14px; font-size: 13px; }
+  .fine { color: var(--mist); font-size: 12px; margin: 0; max-width: 60ch; }
+  .fine b { color: var(--pearl); font-weight: 600; }
+
+  /* ---------- tuning drawer ---------- */
+  #tuning { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); background: rgba(12, 15, 27, 0.94);
+    border-left: 1px solid var(--line); padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px; overflow-y: auto;
+    display: grid; align-content: start; gap: 14px; font-family: var(--mono); font-size: 12px; }
+  #tuning h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 30px; letter-spacing: 0.04em; text-transform: uppercase; }
+  #tuning .hint { color: var(--mist); margin: 0; font-family: var(--sans); font-size: 12.5px; }
+  .tgroup { display: grid; gap: 10px; }
+  .tgroup h3 { margin: 6px 0 0; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sodium); font-weight: 600; }
+  .trow { display: grid; gap: 3px; }
+  .trow .top { display: flex; justify-content: space-between; gap: 8px; }
+  .trow .top span:last-child { color: var(--pearl); font-variant-numeric: tabular-nums; }
+  .trow .top span.changed { color: var(--signal); }
+  .trow small { color: var(--mist); font-family: var(--sans); font-size: 11.5px; line-height: 1.4; }
+  .trow input[type=range] { width: 100%; accent-color: var(--sodium); }
+  .trow label.check { display: flex; gap: 8px; align-items: center; }
+  .trow input[type=checkbox] { accent-color: var(--sodium); }
+  .tbuttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tbtn { background: transparent; color: var(--pearl); border: 1px solid var(--line); border-radius: 3px; padding: 7px 10px; font-family: var(--mono); font-size: 12px; }
+  #copy-out { width: 100%; min-height: 70px; background: rgba(0,0,0,0.3); color: var(--pearl); border: 1px solid var(--line); font: 11px/1.5 var(--mono); }
+
+  /* ---------- touch controls ---------- */
+  #touch { position: fixed; inset: 0; pointer-events: none; }
+  #stick { position: absolute; left: 24px; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); width: 120px; height: 120px;
+    border-radius: 50%; border: 1px solid var(--line); background: rgba(14,18,32,0.35); pointer-events: auto; }
+  #stick-knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(238,241,246,0.35); }
+  .tpad { position: absolute; right: 20px; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(2, auto); gap: 12px; pointer-events: auto; }
+  .tpad button { width: 78px; height: 78px; border-radius: 50%; border: 1px solid var(--line); background: rgba(14,18,32,0.5);
+    color: var(--pearl); font-family: var(--display); font-weight: 800; font-size: 17px; letter-spacing: 0.06em; }
+  .tpad button.primary { background: rgba(255,181,71,0.85); color: var(--night); }
+  .tpad button.active { outline: 2px solid var(--signal); }
+  #tpause { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); pointer-events: auto;
+    background: var(--panel); color: var(--pearl); border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; font-family: var(--mono); font-size: 12px; }
+
+  @media (max-width: 640px) {
+    #speed-num { font-size: 60px; }
+    #hud-air { width: min(210px, calc(100vw - 150px)); padding: 8px 10px; }
+    #air-num { font-size: 26px; }
+    #hud-keys { display: none; }
+    #hud-detail { display: none; }
+    #hud-gauge { bottom: calc(230px + env(safe-area-inset-bottom, 0px)); }
+    .controls { font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toast { animation-duration: 2.2s; }
+    #fade { transition: none; }
+  }
+</style>
+
+<div id="stage"></div>
+<canvas id="streaks"></canvas>
+<div id="reticle"></div>
+
+<div class="hud" id="hud-state">
+  <div class="pill"><b id="state-name">GROUND</b><span class="tiers" aria-label="Speed tier"><i></i><i></i><i></i></span></div>
+  <div id="hud-detail" hidden></div>
+</div>
+
+<div class="hud" id="hud-speed">
+  <div id="speed-num">0</div>
+  <div class="speed-units"><span>M/S</span><span class="label" id="speed-kmh">0 km/h</span></div>
+</div>
+
+<div class="hud" id="hud-air">
+  <div class="air-row"><span class="label">Airborne</span><span class="label" id="air-best-label">best 0 m</span></div>
+  <div class="air-row"><span id="air-num">0 m</span><span class="label" id="air-time">0 s</span></div>
+  <div class="track"><div id="air-fill"></div><div id="air-best"></div></div>
+  <div class="track-scale"><span>0</span><span>1 km</span><span>2 km goal</span></div>
+</div>
+
+<div class="hud" id="hud-gauge" hidden>
+  <div class="gauge-caption"><span class="label">Swing</span><span class="label" id="gauge-text">release in the band</span></div>
+  <div class="track"><div id="gauge-window"></div><div id="gauge-needle"></div></div>
+  <div class="gauge-caption"><span>descending</span><span>low point</span><span>rising</span></div>
+</div>
+
+<div class="hud" id="toasts" aria-live="polite"></div>
+
+<div class="hud" id="hud-keys">
+  <div><kbd>Shift</kbd> swing · sprint · wall-run</div>
+  <div><kbd>Space</kbd> jump · zip · launch</div>
+  <div><kbd>G</kbd> glide <kbd>T</kbd> fast travel <kbd>R</kbd> respawn</div>
+  <div><kbd>H</kbd> stats <kbd>Tab</kbd> tuning <kbd>Esc</kbd> pause</div>
+</div>
+
+<div id="fade"></div>
+
+<div id="touch" hidden>
+  <div id="stick"><div id="stick-knob"></div></div>
+  <div class="tpad">
+    <button id="t-glide" type="button">GLIDE</button>
+    <button id="t-jump" type="button">JUMP</button>
+    <button id="t-travel" type="button">TRAVEL</button>
+    <button id="t-swing" type="button" class="primary">SWING</button>
+  </div>
+  <button id="tpause" type="button">Pause</button>
+</div>
+
+<aside id="tuning" hidden aria-label="Live tuning">
+  <h2>Live tuning</h2>
+  <p class="hint">Changes apply while you play. These are the same values as <code>DA_TraversalTuning</code> in the Unreal project; copy them out as <code>Trav.Set</code> console commands.</p>
+  <div class="tbuttons">
+    <button class="tbtn" id="t-copy" type="button">Copy as Trav.Set</button>
+    <button class="tbtn" id="t-reset" type="button">Reset all</button>
+    <button class="tbtn" id="t-close" type="button">Close</button>
+  </div>
+  <textarea id="copy-out" readonly hidden aria-label="Changed values"></textarea>
+  <div id="tuning-list"></div>
+</aside>
+
+<div id="menu">
+  <div class="card">
+    <div class="kicker">Phase 1 traversal prototype · browser preview</div>
+    <h1>Web of the <span>City</span></h1>
+    <p class="lede">Swing through the 1.8 km greybox city from the Unreal project. The goal from the design brief: 2,000 metres without touching down.</p>
+    <dl class="controls" id="controls-desktop">
+      <dt><kbd>Shift</kbd> hold</dt><dd>Swing in the air · sprint on the ground · run up walls</dd>
+      <dt><kbd>Space</kbd></dt><dd>Jump · web-zip where you look · launch off a perch</dd>
+      <dt><kbd>W A S D</kbd> + mouse</dt><dd>Steer and look</dd>
+      <dt><kbd>G</kbd> · <kbd>T</kbd> · <kbd>R</kbd></dt><dd>Glide · fast travel · back to start</dd>
+      <dt><kbd>H</kbd> · <kbd>Tab</kbd></dt><dd>Stats · live tuning</dd>
+    </dl>
+    <p class="fine">Jump, then hold <b>Shift</b> and keep holding: webs chain by themselves. Let go while the needle sits in the green band for a <b>perfect release</b>, which builds speed tiers up to 70 m/s. Gamepads work too (RT swing, A jump). On a phone, use the on-screen stick and buttons.</p>
+    <div class="actions">
+      <button class="btn" id="play" type="button">Start swinging</button>
+      <button class="ghost" id="play-tuning" type="button">Open live tuning</button>
+    </div>
+    <p class="fine">A browser preview of the game's movement code, running the same rules that the Unreal build uses, in placeholder art. No combat, story or final visuals yet.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+import { BoxWorld, Hero, State, TraversalSim, V, UP, makeInput } from './sim.js';
+import { LAYOUT } from './layout.js';
+import { TUNING_FIELDS, defaultTuning } from './tuning.js';
+
+const THREE = window.THREE;
+const STEP = 1 / 60;
+const $ = (id) => document.getElementById(id);
+const toThree = (v) => new THREE.Vector3(v.x, v.z, -v.y);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage may be blocked */ } },
+};
+
+// ------------------------------------------------------------------ world + hero
+
+const world = BoxWorld.fromLayout(LAYOUT);
+const tuning = defaultTuning();
+const hero = new Hero(world, tuning);
+const start = new V(...LAYOUT.start);
+hero.placeOnGround(start);
+let best = store.get('wotc-best', 0);
+
+// ------------------------------------------------------------------ renderer and scene
+
+const COLORS = {
+  skyTop: new THREE.Color('#141a33'), skyMid: new THREE.Color('#4a3f66'), horizon: new THREE.Color('#f0a06a'),
+  fog: new THREE.Color('#9a6f73'), sun: new THREE.Color('#ffd2a1'), hemiSky: new THREE.Color('#8fa3d9'),
+  hemiGround: new THREE.Color('#3a2e2e'), window: new THREE.Color('#ffc978'),
+};
+const FOG_NEAR = 180, FOG_FAR = 1500;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+$('stage').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(COLORS.fog, FOG_NEAR, FOG_FAR);
+const camera = new THREE.PerspectiveCamera(tuning.CameraFovBase, window.innerWidth / window.innerHeight, 0.1, 4000);
+
+const sunDir = new THREE.Vector3(-0.55, 0.32, 0.77).normalize();
+scene.add(new THREE.HemisphereLight(COLORS.hemiSky, COLORS.hemiGround, 0.85));
+const sun = new THREE.DirectionalLight(COLORS.sun, 1.1);
+sun.position.copy(sunDir);
+scene.add(sun);
+
+// Sky dome: dusk gradient with a warm glow toward the sun.
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: COLORS.skyTop }, mid: { value: COLORS.skyMid }, horizon: { value: COLORS.horizon }, sunDir: { value: sunDir } },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform vec3 top, mid, horizon, sunDir; varying vec3 vDir;
+    void main(){
+      float h = vDir.y;
+      vec3 c = h > 0.0 ? mix(mix(horizon, mid, smoothstep(0.0, 0.18, h)), top, smoothstep(0.18, 0.7, h)) : mix(horizon, vec3(0.16,0.12,0.14), smoothstep(0.0,-0.2,h));
+      float s = max(dot(normalize(vDir), sunDir), 0.0);
+      c += vec3(1.0,0.72,0.45) * (pow(s, 40.0) * 0.9 + pow(s, 6.0) * 0.18);
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+}));
+scene.add(sky);
+
+// Ground: asphalt with sidewalks, dashed lane lines on avenues and streets, and the park.
+const g = LAYOUT.grid;
+const [ext, eyt] = LAYOUT.extent;
+const groundMat = new THREE.ShaderMaterial({
+  uniforms: {
+    fogColor: { value: COLORS.fog }, fogNear: { value: FOG_NEAR }, fogFar: { value: FOG_FAR },
+    grid: { value: new THREE.Vector4(g.blockX + g.avenue, g.blockY + g.street, g.blockX, g.blockY) },
+    park: { value: new THREE.Vector4(...LAYOUT.park) }, extent: { value: new THREE.Vector2(ext, eyt) },
+  },
+  vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `uniform vec3 fogColor; uniform float fogNear, fogFar; uniform vec4 grid, park; uniform vec2 extent; varying vec3 vW;
+    void main(){
+      vec2 p = vec2(vW.x, -vW.z);
+      vec3 asphalt = vec3(0.105, 0.11, 0.125);
+      vec3 c = asphalt;
+      vec2 local = mod(p, grid.xy);
+      bool inBlock = local.x < grid.z && local.y < grid.w;
+      bool inside = p.x > 0.0 && p.y > 0.0 && p.x < extent.x && p.y < extent.y;
+      if (inside && inBlock) c = vec3(0.24, 0.235, 0.25);
+      if (inside && !inBlock) {
+        float ax = abs(local.x - (grid.z + (grid.x - grid.z) * 0.5));
+        float sy = abs(local.y - (grid.w + (grid.y - grid.w) * 0.5));
+        float dashY = step(0.5, fract(p.y / 6.0)), dashX = step(0.5, fract(p.x / 6.0));
+        if (local.x >= grid.z && ax < 0.12 && local.y < grid.w) c = mix(c, vec3(0.86, 0.72, 0.42), dashY);
+        if (local.y >= grid.w && sy < 0.12 && local.x < grid.z) c = mix(c, vec3(0.86, 0.72, 0.42), dashX);
+      }
+      if (p.x > park.x && p.y > park.y && p.x < park.z && p.y < park.w) c = vec3(0.14, 0.24, 0.15) * (0.9 + 0.1 * fract(sin(dot(floor(p*0.5), vec2(12.9,78.2)))*43758.5));
+      float d = distance(vW, cameraPosition);
+      c = mix(c, fogColor, smoothstep(fogNear, fogFar, d));
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(ext + 600, eyt + 600), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(ext / 2, 0, -eyt / 2);
+scene.add(ground);
+
+// Buildings: one instanced draw, lit windows computed from world position.
+const buildingMat = new THREE.ShaderMaterial({
+  uniforms: {
+    sunDir: { value: sunDir }, sunColor: { value: COLORS.sun }, hemiSky: { value: COLORS.hemiSky }, hemiGround: { value: COLORS.hemiGround },
+    windowColor: { value: COLORS.window }, fogColor: { value: COLORS.fog }, fogNear: { value: FOG_NEAR }, fogFar: { value: FOG_FAR },
+  },
+  vertexShader: `varying vec3 vW; varying vec3 vN; varying vec3 vC;
+    void main(){
+      mat4 m = modelMatrix * instanceMatrix;
+      vec4 w = m * vec4(position, 1.0);
+      vW = w.xyz; vN = normalize(mat3(m) * normal);
+      #ifdef USE_INSTANCING_COLOR
+        vC = instanceColor;
+      #else
+        vC = vec3(0.3);
+      #endif
+      gl_Position = projectionMatrix * viewMatrix * w;
+    }`,
+  fragmentShader: `uniform vec3 sunDir, sunColor, hemiSky, hemiGround, windowColor, fogColor; uniform float fogNear, fogFar;
+    varying vec3 vW; varying vec3 vN; varying vec3 vC;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    void main(){
+      vec3 n = normalize(vN);
+      vec3 light = mix(hemiGround, hemiSky, n.y * 0.5 + 0.5) * 0.75 + sunColor * max(dot(n, sunDir), 0.0) * 0.9;
+      vec3 c = vC * light;
+      if (abs(n.y) < 0.5) {
+        vec2 uv = vec2(abs(n.x) > 0.5 ? vW.z : vW.x, vW.y);
+        vec2 cell = uv / vec2(3.2, 3.8);
+        vec2 f = fract(cell); vec2 id = floor(cell);
+        float pane = step(0.2, f.x) * step(f.x, 0.8) * step(0.28, f.y) * step(f.y, 0.82) * step(4.0, vW.y);
+        float lit = step(0.64, hash(id + vC.xy * 91.0 + n.xz * 7.0));
+        vec3 glass = mix(c * 0.45 + vec3(0.02, 0.03, 0.06), windowColor * 1.05, lit);
+        c = mix(c, glass, pane);
+      } else if (n.y > 0.5) {
+        c *= 0.78;
+      }
+      float d = distance(vW, cameraPosition);
+      c = mix(c, fogColor, smoothstep(fogNear, fogFar, d));
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+
+const unitBox = new THREE.BoxGeometry(1, 1, 1);
+const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 14);
+const unitSphere = new THREE.SphereGeometry(0.5, 14, 10);
+const byKind = {};
+for (const b of LAYOUT.boxes) (byKind[b[0]] ||= []).push(b);
+
+function instanced(list, geometry, material, colorFor) {
+  const mesh = new THREE.InstancedMesh(geometry, material, list.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color();
+  list.forEach((b, i) => {
+    const [, cx, cy, cz, sx, sy, sz] = b;
+    m.compose(new THREE.Vector3(cx, cz, -cy), q, new THREE.Vector3(sx, sz, sy));
+    mesh.setMatrixAt(i, m);
+    mesh.setColorAt(i, colorFor(b, i, c));
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  scene.add(mesh);
+  return mesh;
+}
+const buildingTints = ['#3b465e', '#46506a', '#343c50', '#525a6c', '#3e4a5a', '#4b4658', '#394a57'];
+instanced(byKind.building || [], unitBox, buildingMat, (b, i, c) => c.set(buildingTints[(i * 7 + Math.floor(b[6])) % buildingTints.length]));
+const lambert = (hex) => new THREE.MeshLambertMaterial({ color: hex });
+instanced(byKind.tank || [], unitCyl, lambert('#ffffff'), (b, i, c) => c.set(i % 3 ? '#6b4f3a' : '#7a5a40'));
+instanced(byKind.trunk || [], unitCyl, lambert('#ffffff'), (b, i, c) => c.set('#4a3a2c'));
+instanced(byKind.canopy || [], unitSphere, lambert('#ffffff'), (b, i, c) => c.set(i % 2 ? '#2f5a37' : '#3b6b3f'));
+
+// Fast-travel stations: amber beacons.
+for (const [x, y] of LAYOUT.stations) {
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 60, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#ffb547', transparent: true, opacity: 0.25, fog: true }));
+  beacon.position.set(x, 30, -y);
+  scene.add(beacon);
+}
+
+// Hero: a simple figure in navy and amber, built facing +X.
+const heroRoot = new THREE.Group();
+const heroBody = new THREE.Group();
+heroRoot.add(heroBody);
+const suit = lambert('#1d2b4f'), accent = lambert('#ffb547'), lens = new THREE.MeshBasicMaterial({ color: '#eef1f6' });
+const part = (parent, geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); parent.add(m); return m;
+};
+// Limbs hang from a joint (shoulder or hip) so they can swing and reach.
+const limb = (x, y, z, length, radius, endMat, endScale) => {
+  const joint = new THREE.Group(); joint.position.set(x, y, z); heroBody.add(joint);
+  part(joint, unitCyl, suit, 0, -length / 2, 0, radius, length, radius);
+  part(joint, unitSphere, endMat, 0, -length, 0, ...endScale);
+  return joint;
+};
+part(heroBody, unitCyl, suit, 0, 0.2, 0, 0.42, 0.62, 0.3);            // torso
+part(heroBody, unitSphere, suit, 0, 0.66, 0, 0.3, 0.32, 0.3);         // head
+part(heroBody, unitSphere, lens, 0.12, 0.68, 0.07, 0.06, 0.08, 0.1);  // eyes
+part(heroBody, unitSphere, lens, 0.12, 0.68, -0.07, 0.06, 0.08, 0.1);
+part(heroBody, unitCyl, accent, 0, 0.36, 0, 0.44, 0.06, 0.32);        // chest band
+const armL = limb(0, 0.46, 0.27, 0.6, 0.11, accent, [0.13, 0.13, 0.13]);
+const armR = limb(0, 0.46, -0.27, 0.6, 0.11, accent, [0.13, 0.13, 0.13]);
+const legL = limb(0, -0.1, 0.1, 0.78, 0.15, accent, [0.2, 0.12, 0.17]);
+const legR = limb(0, -0.1, -0.1, 0.78, 0.15, accent, [0.2, 0.12, 0.17]);
+scene.add(heroRoot);
+
+const webLine = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 6), new THREE.MeshBasicMaterial({ color: '#eef1f6', fog: true }));
+webLine.visible = false;
+scene.add(webLine);
+const marker = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.09, 8, 24), new THREE.MeshBasicMaterial({ color: '#ffb547', fog: false }));
+marker.visible = false;
+scene.add(marker);
+
+// ------------------------------------------------------------------ input
+
+const keys = new Set();
+const edges = { jump: false, glide: false };
+const view = { yaw: Math.PI / 2, pitch: -0.18 };
+const touch = { active: false, stickX: 0, stickY: 0, swing: false, lookId: null, lastX: 0, lastY: 0 };
+let playing = false;
+let pointerLocked = false;
+
+const canvas = renderer.domElement;
+const MOUSE_SENS = 0.0021;
+// Browser framing: a bit higher and further back than the Unreal camera, so the rope and the arc stay in view.
+const CAM_EXTRA_ARM = 2.0, CAM_EXTRA_HEIGHT = 1.1;
+// With no look input for this long, the camera eases in behind the direction of travel.
+const AUTO_FOLLOW_DELAY = 0.9, AUTO_FOLLOW_RATE = 1.4;
+let lastLookTime = -10;
+
+function lookBy(dx, dy) {
+  if (dx !== 0 || dy !== 0) lastLookTime = clock;
+  view.yaw -= dx;
+  view.pitch = Math.max(-1.3, Math.min(1.2, view.pitch - dy));
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') { e.preventDefault(); toggleTuning(); return; }
+  if (!playing) return;
+  if (['Space', 'ShiftLeft', 'ShiftRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys.add(e.code);
+  if (e.code === 'Space') edges.jump = true;
+  if (e.code === 'KeyG') edges.glide = true;
+  if (e.code === 'KeyT') fastTravel();
+  if (e.code === 'KeyR') respawn();
+  if (e.code === 'KeyH') $('hud-detail').hidden = !$('hud-detail').hidden;
+});
+window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
+
+canvas.addEventListener('click', () => { if (playing && !pointerLocked && !touch.active) requestLock(); });
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+  if (!pointerLocked && playing && !touch.active && $('tuning').hidden) pause();
+});
+document.addEventListener('mousemove', (e) => { if (pointerLocked) lookBy(e.movementX * MOUSE_SENS, e.movementY * MOUSE_SENS); });
+
+function requestLock() {
+  try {
+    const r = canvas.requestPointerLock();
+    if (r && r.catch) r.catch(() => {});
+  } catch { /* pointer lock unavailable; mouse look needs it */ }
+}
+
+// Touch: left stick, right-side drag to look, buttons.
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const stick = $('stick'), knob = $('stick-knob');
+stick.addEventListener('pointerdown', (e) => { stick.setPointerCapture(e.pointerId); moveStick(e); });
+stick.addEventListener('pointermove', (e) => { if (stick.hasPointerCapture(e.pointerId)) moveStick(e); });
+stick.addEventListener('pointerup', () => { touch.stickX = 0; touch.stickY = 0; knob.style.transform = ''; });
+function moveStick(e) {
+  const r = stick.getBoundingClientRect();
+  let x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+  const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+  touch.stickX = x; touch.stickY = -y;
+  knob.style.transform = `translate(${x * 36}px, ${y * 36}px)`;
+}
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch' || !playing) return;
+  touch.lookId = e.pointerId; touch.lastX = e.clientX; touch.lastY = e.clientY;
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== touch.lookId) return;
+  lookBy((e.clientX - touch.lastX) * 0.006, (e.clientY - touch.lastY) * 0.006);
+  touch.lastX = e.clientX; touch.lastY = e.clientY;
+});
+canvas.addEventListener('pointerup', (e) => { if (e.pointerId === touch.lookId) touch.lookId = null; });
+const holdButton = (el, on, off) => {
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.classList.add('active'); on(); });
+  const up = () => { el.classList.remove('active'); off && off(); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('pointerleave', up);
+};
+holdButton($('t-swing'), () => { touch.swing = true; }, () => { touch.swing = false; });
+holdButton($('t-jump'), () => { edges.jump = true; });
+holdButton($('t-glide'), () => { edges.glide = true; });
+holdButton($('t-travel'), () => fastTravel());
+$('tpause').addEventListener('click', () => pause());
+
+// Gamepad (standard mapping).
+const padPrev = {};
+function readPad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const p = pads && [...pads].find(Boolean);
+  if (!p) return null;
+  const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
+  const pressed = (i) => !!(p.buttons[i] && p.buttons[i].pressed);
+  const edge = (i) => { const now = pressed(i); const was = padPrev[i]; padPrev[i] = now; return now && !was; };
+  if (edge(0)) edges.jump = true;
+  if (edge(12)) edges.glide = true;
+  if (edge(15)) fastTravel();
+  if (edge(9)) pause();
+  return { mx: dz(p.axes[0] || 0), my: -dz(p.axes[1] || 0), lx: dz(p.axes[2] || 0), ly: dz(p.axes[3] || 0),
+    swing: (p.buttons[7] && p.buttons[7].value > 0.3) || pressed(10) };
+}
+
+function buildInput(pad) {
+  let mx = 0, my = 0;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) my += 1;
+  if (keys.has('KeyS') || keys.has('ArrowDown')) my -= 1;
+  if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
+  if (pad) { mx += pad.mx; my += pad.my; }
+  mx += touch.stickX; my += touch.stickY;
+  const len = Math.hypot(mx, my); if (len > 1) { mx /= len; my /= len; }
+  const fwd = new V(Math.cos(view.yaw), Math.sin(view.yaw), 0), right = new V(Math.sin(view.yaw), -Math.cos(view.yaw), 0);
+  const input = makeInput();
+  input.move = fwd.mul(my).add(right.mul(mx));
+  input.cameraForward = new V(Math.cos(view.pitch) * Math.cos(view.yaw), Math.cos(view.pitch) * Math.sin(view.yaw), Math.sin(view.pitch));
+  input.traversalHeld = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.swing || !!(pad && pad.swing);
+  input.jumpHeld = keys.has('Space');
+  input.jumpPressed = edges.jump;
+  input.glidePressed = edges.glide;
+  return input;
+}
+
+// ------------------------------------------------------------------ menu, pause, travel
+
+function play(openTuning = false) {
+  $('menu').hidden = true;
+  playing = true;
+  touch.active = isTouch;
+  $('touch').hidden = !isTouch;
+  if (openTuning) toggleTuning(true);
+  else if (!isTouch) requestLock();
+  lastTime = performance.now();
+}
+function pause() {
+  playing = false;
+  keys.clear(); touch.swing = false;
+  $('menu').hidden = false;
+  $('touch').hidden = true;
+  $('play').textContent = 'Resume';
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+$('play').addEventListener('click', () => play(false));
+$('play-tuning').addEventListener('click', () => play(true));
+
+let stationIndex = 0;
+function teleportTo(feet) {
+  const fade = $('fade');
+  fade.style.opacity = '1';
+  setTimeout(() => { hero.teleport(feet); prevPos = hero.body.position; fade.style.opacity = '0'; }, reducedMotion ? 0 : 300);
+}
+function fastTravel() {
+  const [x, y, z] = LAYOUT.stations[stationIndex % LAYOUT.stations.length];
+  stationIndex++;
+  toast(`Station ${((stationIndex - 1) % LAYOUT.stations.length) + 1}`, 'small');
+  teleportTo(new V(x, y, z));
+}
+function respawn() { teleportTo(start); }
+
+// ------------------------------------------------------------------ tuning drawer
+
+const CURATED = [
+  ['Swing', ['SwingGravityScale', 'SwingLowPointBoost', 'SwingMinSpeed', 'SwingPlaneAlign', 'SwingGroundClearance', 'SwingsPerTier']],
+  ['Speed and release', ['SpeedTier1', 'SpeedTier2', 'SpeedTier3', 'ReleaseWindowMinAngle', 'ReleaseWindowMaxAngle', 'ReleaseBoostSpeed']],
+  ['Anchors', ['AnchorReach', 'AnchorConeAngle', 'AnchorIdealElevationMin', 'AnchorIdealElevationMax']],
+  ['Air, walls and zip', ['AirGravityScale', 'AirControlAccel', 'WallRunSpeed', 'ZipSpeed', 'bSkyAnchorEnabled', 'bAutoWebCatch', 'bGlideUnlocked']],
+  ['Camera', ['CameraFovBase', 'CameraFovMax', 'CameraLookAhead']],
+];
+const fieldByName = Object.fromEntries(TUNING_FIELDS.map((f) => [f.name, f]));
+const tuningInputs = [];
+function fmt(f, v) { return f.type === 'bool' ? (v ? 'on' : 'off') : f.type === 'int' ? String(v) : Number(v).toFixed(Math.abs(v) < 10 ? 2 : 1); }
+function buildTuning() {
+  const list = $('tuning-list');
+  for (const [title, names] of CURATED) {
+    const group = document.createElement('div'); group.className = 'tgroup';
+    const h = document.createElement('h3'); h.textContent = title; group.appendChild(h);
+    for (const name of names) {
+      const f = fieldByName[name]; if (!f) continue;
+      const row = document.createElement('div'); row.className = 'trow';
+      const id = `tune-${name}`;
+      if (f.type === 'bool') {
+        row.innerHTML = `<label class="check" for="${id}"><input type="checkbox" id="${id}"> <span>${name}</span></label><small></small>`;
+        const box = row.querySelector('input'); box.checked = tuning[name];
+        box.addEventListener('change', () => { tuning[name] = box.checked; refreshTuning(); });
+        tuningInputs.push({ f, el: box, row });
+      } else {
+        const lo = f.min ?? 0;
+        const hi = f.max ?? Math.max(Math.abs(f.default) * 3, 1);
+        const step = f.type === 'int' ? 1 : (hi - lo) / 300;
+        row.innerHTML = `<div class="top"><label for="${id}">${name}</label><span></span></div><input type="range" id="${id}" min="${lo}" max="${hi}" step="${step}"><small></small>`;
+        const slider = row.querySelector('input'); slider.value = tuning[name];
+        slider.addEventListener('input', () => { tuning[name] = f.type === 'int' ? Math.round(+slider.value) : +slider.value; refreshTuning(); });
+        tuningInputs.push({ f, el: slider, row });
+      }
+      row.querySelector('small').textContent = f.doc;
+      group.appendChild(row);
+    }
+    list.appendChild(group);
+  }
+  refreshTuning();
+}
+function refreshTuning() {
+  for (const { f, el, row } of tuningInputs) {
+    const v = tuning[f.name];
+    if (f.type === 'bool') el.checked = v; else el.value = v;
+    const out = row.querySelector('.top span:last-child');
+    if (out) { out.textContent = fmt(f, v); out.classList.toggle('changed', v !== f.default); }
+  }
+}
+function toggleTuning(force) {
+  const panel = $('tuning');
+  panel.hidden = force === undefined ? !panel.hidden : !force;
+  if (!panel.hidden && document.pointerLockElement) document.exitPointerLock();
+}
+$('t-close').addEventListener('click', () => { toggleTuning(false); if (playing && !touch.active) requestLock(); });
+$('t-reset').addEventListener('click', () => { Object.assign(tuning, defaultTuning()); refreshTuning(); $('copy-out').hidden = true; });
+$('t-copy').addEventListener('click', () => {
+  const changed = TUNING_FIELDS.filter((f) => tuning[f.name] !== f.default)
+    .map((f) => `Trav.Set ${f.name} ${f.type === 'bool' ? (tuning[f.name] ? 'True' : 'False') : tuning[f.name]}`);
+  const text = changed.length ? changed.join('\n') : '(no changes from the defaults)';
+  const out = $('copy-out'); out.value = text; out.hidden = false;
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast('Copied', 'small'), () => { out.focus(); out.select(); });
+  else { out.focus(); out.select(); }
+});
+buildTuning();
+
+// ------------------------------------------------------------------ HUD
+
+const tierEls = [...document.querySelectorAll('.tiers i')];
+function toast(text, cls = '') {
+  const el = document.createElement('div');
+  el.className = `toast ${cls}`; el.textContent = text;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 1700);
+  while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
+}
+const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+let hudTimer = 0;
+function updateHud(dt) {
+  hudTimer -= dt;
+  const sim = hero.sim, body = hero.body;
+  // The gauge moves every frame; text updates ~20 times a second.
+  const swinging = sim.state === State.Swing;
+  $('hud-gauge').hidden = !swinging;
+  if (swinging) {
+    const a = sim.swingAngle(body.position);
+    const lo = -60, hi = 80, pct = (x) => `${((Math.max(lo, Math.min(hi, x)) - lo) / (hi - lo)) * 100}%`;
+    const win = $('gauge-window');
+    win.style.left = pct(tuning.ReleaseWindowMinAngle);
+    win.style.width = `calc(${pct(tuning.ReleaseWindowMaxAngle)} - ${pct(tuning.ReleaseWindowMinAngle)})`;
+    const needle = $('gauge-needle');
+    needle.style.left = pct(a);
+    const hot = a >= tuning.ReleaseWindowMinAngle && a <= tuning.ReleaseWindowMaxAngle;
+    needle.classList.toggle('hot', hot);
+    $('gauge-text').textContent = hot ? 'let go now' : 'release in the band';
+  }
+  if (hudTimer > 0) return;
+  hudTimer = 0.05;
+  const speed = body.velocity.len();
+  $('speed-num').textContent = nf.format(speed);
+  $('speed-kmh').textContent = `${nf.format(speed * 3.6)} km/h`;
+  $('state-name').textContent = sim.state.toUpperCase();
+  const tier = sim.speedTier();
+  tierEls.forEach((el, i) => el.classList.toggle('on', i <= tier && sim.state !== State.Ground));
+  const s = sim.streak;
+  const dist = sim.state === State.Ground ? 0 : s.distance;
+  $('air-num').textContent = `${nf.format(dist)} m`;
+  $('air-num').classList.toggle('goal', dist >= 2000);
+  $('air-time').textContent = `${Math.floor(sim.state === State.Ground ? 0 : s.time)} s`;
+  $('air-fill').style.width = `${Math.min(100, (dist / 2000) * 100)}%`;
+  $('air-fill').classList.toggle('goal', dist >= 2000);
+  $('air-best').style.left = `${Math.min(100, (best / 2000) * 100)}%`;
+  $('air-best-label').textContent = `best ${nf.format(best)} m`;
+  if (!$('hud-detail').hidden) {
+    const p = sim.preview;
+    const toAnchor = p.valid ? p.surface.sub(body.position) : null;
+    $('hud-detail').innerHTML = [
+      `state <em>${sim.state}</em> for <em>${sim.stateTime.toFixed(1)} s</em>`,
+      `height <em>${body.position.z.toFixed(0)} m</em> · cap <em>${sim.speedCap().toFixed(0)} m/s</em> · chain <em>${sim.chain}</em>`,
+      swinging ? `rope <em>${sim.rope.toFixed(0)} m</em> · ${sim.swingAnchor.sky ? '<em>sky</em>' : 'wall'} anchor · angle <em>${sim.swingAngle(body.position).toFixed(0)}°</em>`
+        : toAnchor ? `next anchor <em>${toAnchor.len().toFixed(0)} m</em>, <em>${(Math.asin(Math.max(-1, Math.min(1, toAnchor.z / toAnchor.len()))) * 57.3).toFixed(0)}°</em> up`
+        : `no anchor in reach · sky anchors left <em>${sim.skyLeft()}</em>`,
+      `last run <em>${nf.format(sim.lastStreak.distance)} m</em> · ${sim.lastStreak.swings} swings · ${sim.lastStreak.perfectReleases} perfect`,
+      `fov <em>${camera.fov.toFixed(0)}</em> · <em>${fps.toFixed(0)}</em> fps`,
+    ].join('<br>');
+  }
+}
+
+function handleEvents(e) {
+  if (e.perfectRelease) toast('Perfect release', 'good');
+  if (e.tierUp) toast(`Speed tier ${hero.sim.speedTier() + 1}`, 'warm');
+  if (e.skyAnchor) toast('Sky anchor', 'small');
+  if (e.autoCatch) toast('Web catch', 'small');
+  if (e.launch) toast('Launch', 'warm');
+  if (e.streakEnded) {
+    const d = hero.sim.lastStreak.distance;
+    if (d >= 2000) toast(`${nf.format(d)} m without touching down`, 'good');
+    else if (d >= 100) toast(`Touched down after ${nf.format(d)} m`, 'small');
+    if (d > best) { best = d; store.set('wotc-best', Math.round(best)); }
+  }
+}
+
+// ------------------------------------------------------------------ speed streaks overlay
+
+const streakCanvas = $('streaks');
+const sctx = streakCanvas.getContext('2d');
+const streakSeeds = Array.from({ length: 40 }, () => ({ a: Math.random() * Math.PI * 2, r: 0.35 + Math.random() * 0.5, l: 0.05 + Math.random() * 0.12, s: Math.random() }));
+function drawStreaks(speed, t) {
+  const w = streakCanvas.width, h = streakCanvas.height;
+  sctx.clearRect(0, 0, w, h);
+  if (reducedMotion) return;
+  const k = Math.max(0, Math.min(1, (speed - 28) / 40));
+  if (k <= 0) return;
+  sctx.lineWidth = Math.max(1, w / 900);
+  const cx = w / 2, cy = h / 2, R = Math.hypot(cx, cy);
+  for (const st of streakSeeds) {
+    const phase = (t * (0.6 + st.s) + st.s) % 1;
+    const r0 = R * (st.r + phase * 0.25), r1 = r0 + R * st.l * (0.5 + k);
+    sctx.strokeStyle = `rgba(238,241,246,${0.22 * k * (1 - phase)})`;
+    sctx.beginPath();
+    sctx.moveTo(cx + Math.cos(st.a) * r0, cy + Math.sin(st.a) * r0);
+    sctx.lineTo(cx + Math.cos(st.a) * r1, cy + Math.sin(st.a) * r1);
+    sctx.stroke();
+  }
+}
+
+// ------------------------------------------------------------------ main loop
+
+let lastTime = performance.now();
+let acc = 0, fps = 60, clock = 0;
+let prevPos = hero.body.position;
+const camState = { target: toThree(hero.body.position), fov: tuning.CameraFovBase, arm: tuning.CameraArmBase, look: new V() };
+const q = new THREE.Quaternion(), qYaw = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  streakCanvas.width = Math.round(w * dpr); streakCanvas.height = Math.round(h * dpr);
+  streakCanvas.style.width = `${w}px`; streakCanvas.style.height = `${h}px`;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - lastTime) / 1000);
+  lastTime = now;
+  fps = fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
+  clock += dt;
+
+  if (playing) {
+    const pad = readPad();
+    if (pad) lookBy(pad.lx * 2.6 * dt, -pad.ly * 1.9 * dt);
+    acc += dt;
+    while (acc >= STEP) {
+      prevPos = hero.body.position;
+      hero.step(STEP, buildInput(pad));
+      edges.jump = false; edges.glide = false;
+      handleEvents(hero.sim.consumeEvents());
+      acc -= STEP;
+    }
+  }
+
+  const alpha = playing ? acc / STEP : 1;
+  const pos = V.lerp(prevPos, hero.body.position, alpha);
+  const sim = hero.sim;
+
+  // Hero pose: face the travel direction, lean along the rope while swinging.
+  const f = sim.facing(hero.body);
+  qYaw.setFromAxisAngle(yAxis, Math.atan2(f.y, f.x));
+  heroRoot.position.copy(toThree(pos));
+  let upDir = yAxis;
+  if (sim.state === State.Swing && sim.swingAnchor.valid) upDir = toThree(sim.swingAnchor.pivot.sub(pos)).normalize();
+  else if (sim.state === State.WallRun || sim.state === State.WallCling) upDir = new THREE.Vector3(0, 1, 0);
+  q.setFromUnitVectors(yAxis, upDir).multiply(qYaw);
+  heroBody.quaternion.slerp(q, 1 - Math.exp(-dt * 10));
+  // Joint angles about Z swing a limb forward (+) or back (-); pi points it straight up.
+  const st = sim.state;
+  const run = st === State.Ground ? Math.sin(clock * 12) * Math.min(1, hero.body.velocity.len() / 7) * 0.7
+    : st === State.WallRun ? Math.sin(clock * 16) * 0.8 : 0;
+  let pose = { al: run, ar: -run, ll: -run, lr: run, spread: 0 };
+  if (st === State.Swing) pose = { al: Math.PI, ar: -0.5, ll: 0.5, lr: -0.2, spread: 0 };
+  else if (st === State.Zip) pose = { al: 2.4, ar: 2.4, ll: -0.4, lr: -0.4, spread: 0 };
+  else if (st === State.Glide) pose = { al: 0, ar: 0, ll: -0.2, lr: -0.2, spread: 1.45 };
+  else if (st === State.Air || st === State.Launch) pose = { al: 1.2, ar: -0.8, ll: 0.6, lr: -0.4, spread: 0.2 };
+  else if (st === State.WallCling) pose = { al: 2.6, ar: 0.6, ll: 0.8, lr: -0.3, spread: 0.3 };
+  const ease = 1 - Math.exp(-dt * 14);
+  armL.rotation.z += (pose.al - armL.rotation.z) * ease; armR.rotation.z += (pose.ar - armR.rotation.z) * ease;
+  legL.rotation.z += (pose.ll - legL.rotation.z) * ease; legR.rotation.z += (pose.lr - legR.rotation.z) * ease;
+  armL.rotation.x += (-pose.spread - armL.rotation.x) * ease; armR.rotation.x += (pose.spread - armR.rotation.x) * ease;
+
+  // Web line and anchor preview.
+  const hand = toThree(pos.add(UP.mul(0.9)));
+  let webEnd = null;
+  if (sim.state === State.Swing && sim.swingAnchor.valid) webEnd = toThree(sim.swingAnchor.surface);
+  else if (sim.state === State.Zip) webEnd = toThree(sim.zipTarget);
+  webLine.visible = !!webEnd;
+  if (webEnd) {
+    const span = webEnd.clone().sub(hand);
+    const len = span.length();
+    webLine.position.copy(hand).addScaledVector(span, 0.5);
+    webLine.quaternion.setFromUnitVectors(yAxis, span.divideScalar(Math.max(len, 1e-6)));
+    webLine.scale.set(1, len, 1);
+  }
+  const showMarker = sim.preview.valid && sim.state !== State.Swing && sim.state !== State.Ground;
+  marker.visible = showMarker;
+  if (showMarker) {
+    marker.position.copy(toThree(sim.preview.surface));
+    marker.lookAt(camera.position);
+    marker.scale.setScalar(1 + Math.sin(clock * 8) * 0.12);
+  }
+
+  // Camera auto-follow while travelling fast and not steering the view.
+  const vel = hero.body.velocity;
+  if (playing && clock - lastLookTime > AUTO_FOLLOW_DELAY && vel.len2D() > 8 && sim.state !== State.Ground
+      && sim.state !== State.WallRun && sim.state !== State.WallCling) {
+    let diff = Math.atan2(vel.y, vel.x) - view.yaw;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const kf = 1 - Math.exp(-dt * AUTO_FOLLOW_RATE);
+    view.yaw += diff * kf;
+    view.pitch += (-0.18 - view.pitch) * kf * 0.5;
+  }
+
+  // Camera: speed-scaled FOV, arm and look-ahead from the sim, lag, and collision.
+  const ct = TraversalSim.cameraTarget(tuning, hero.body.velocity);
+  const k = 1 - Math.exp(-dt * tuning.CameraInterpSpeed);
+  camState.fov += (ct.fov - camState.fov) * k;
+  camState.arm += (ct.arm - camState.arm) * k;
+  camState.look = V.lerp(camState.look, ct.lookAhead, k);
+  const targetSim = pos.add(UP.mul(CAM_EXTRA_HEIGHT)).add(camState.look);
+  const lag = 1 - Math.exp(-dt * tuning.CameraLagSpeed * 1.5);
+  camState.target.lerp(toThree(targetSim), lag);
+  const tgt = new V(camState.target.x, -camState.target.z, camState.target.y);
+  const back = new V(Math.cos(view.pitch) * Math.cos(view.yaw), Math.cos(view.pitch) * Math.sin(view.yaw), Math.sin(view.pitch)).neg();
+  let camPos = tgt.add(back.mul(camState.arm + CAM_EXTRA_ARM));
+  const block = world.trace(tgt, camPos, 0.25);
+  if (block) camPos = tgt.add(back.mul(Math.max(0.6, block.distance - 0.2)));
+  camera.position.copy(toThree(camPos));
+  camera.lookAt(camState.target);
+  camera.fov = camState.fov;
+  camera.updateProjectionMatrix();
+  sky.position.copy(camera.position);
+
+  drawStreaks(hero.body.velocity.len(), clock);
+  updateHud(dt);
+  renderer.render(scene, camera);
+}
+
+// Keep the run going across a republish of this page.
+function boot(saved) {
+  if (saved && saved.pos) { hero.teleport(new V(saved.pos[0], saved.pos[1], saved.pos[2] - hero.body.halfHeight - 1)); prevPos = hero.body.position; }
+  if (saved && typeof saved.best === 'number') best = Math.max(best, saved.best);
+  requestAnimationFrame(frame);
+}
+try { window.claude?.hot?.snapshot?.(() => ({ pos: [hero.body.position.x, hero.body.position.y, hero.body.position.z], best })); } catch { /* optional */ }
+if (window.claude?.hot?.ready) window.claude.hot.ready(boot); else boot(window.claude?.hot?.data ?? {});
+</script>
