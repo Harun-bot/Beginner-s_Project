@@ -1,0 +1,11 @@
+Category,Asset,Triangle budget,Max texture,LODs / Nanite,Design section,Notes
+Character,Hero (all suits),120000-150000,4096,LOD chain (skeletal),9,Starting budget; adjust after profiling
+Character,Main NPC (story cast),40000-60000,2048,LOD chain (skeletal),9,
+Character,Crowd NPC,10000-20000,2048,LOD chain + Mass LOD,9,
+Environment,Buildings,Nanite,2048,Nanite,9,Modular facade kits + PCG dressing
+Environment,Props,Nanite,2048,Nanite,9,Rooftop props double as web anchors (Section 7)
+Frame,Frame time (Baseline 1080p High),,,,4.3,<= 16.6 ms; GPU <= 14; game thread <= 8; render thread <= 8
+Frame,Memory (Baseline),,,,4.3,VRAM <= 8 GB; RAM <= 12 GB
+Frame,Install size,,,,4.3,<= 100 GB
+AI,Active combat AI,,,,14,About 12
+AI,Nearby crowd agents,,,,14,About 300; thousands of cheap far agents

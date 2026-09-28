@@ -1,0 +1,12 @@
+{
+  "_source": "Design prompt Section 4.3, Baseline tier (RTX 3060-class, 1080p, High preset, 60 FPS). A milestone is not done if it breaks or regresses these.",
+  "avg_frame_ms": 16.6,
+  "avg_gpu_ms": 14.0,
+  "avg_game_ms": 8.0,
+  "avg_render_ms": 8.0,
+  "min_one_percent_low_fps": 45.0,
+  "hitch_ms": 50.0,
+  "max_hitches": 0,
+  "peak_ram_mb": 12288,
+  "regression_tolerance_pct": 5.0
+}
